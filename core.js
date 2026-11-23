@@ -2,11 +2,14 @@
    Principe : un JOURNAL d'événements en ajout seul. L'état affiché est calculé à partir du journal.
    Rien n'est jamais écrasé ni effacé : une modification ou une suppression est un nouvel événement.
    Deux types de fiches : « session » (une séance, avec le nombre de joueurs) et « restock »
-   (des tubes mis à disposition des joueurs à une date donnée). Le stock total chez le trésorier est à part. */
+   (des tubes mis à disposition des joueurs à une date donnée). */
 (function (root) {
   'use strict';
   var PER_TUBE = 12, WEEKS = 52;
-  var DEFAULT_SETTINGS = { tubePrice: 23.95, stockStart: null, bought: 0 };
+  /* Projection : 2 séances par semaine (lundi + vendredi) sur 52 semaines, moins environ 8 séances qui n'ont pas lieu dans l'année. */
+  var SESSIONS_PER_WEEK = 2, CLOSED_PER_YEAR = 8;
+  var SESSIONS_YEAR = WEEKS * SESSIONS_PER_WEEK - CLOSED_PER_YEAR; // 96
+  var DEFAULT_SETTINGS = { tubePrice: 23.95 };
   var JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
   var MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
   var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -23,11 +26,7 @@
     var latest = {}, settings = Object.assign({}, DEFAULT_SETTINGS);
     sorted.forEach(function (e) {
       if (e.type === 'settings') {
-        settings = {
-          tubePrice: e.tubePrice == null ? DEFAULT_SETTINGS.tubePrice : e.tubePrice,
-          stockStart: e.stockStart == null ? null : e.stockStart,
-          bought: e.bought || 0
-        };
+        settings = { tubePrice: e.tubePrice == null ? DEFAULT_SETTINGS.tubePrice : e.tubePrice };
       } else { var k = keyOf(e); if (k) latest[k] = e; }
     });
     var sessions = [], restocks = [], noSessions = [];
@@ -100,10 +99,8 @@
     });
     restocks.forEach(function (r) { tubes += r.tubes; });
     var vol = tubes * PER_TUBE;
-    var weeks = Math.max((first && last ? daysBetween(first, last) : 0) / 7, 1);
-    var tubesWeek = n ? tubes / weeks : 0;
     var price = Number(settings.tubePrice) || 0;
-    var stock = settings.stockStart == null ? null : (Number(settings.stockStart) || 0) + (Number(settings.bought) || 0) - tubes;
+    var tubesSession = n ? tubes / n : 0;
     return {
       n: n, players: players, tubes: tubes, vol: vol, first: first, last: last,
       avgPlayers: n ? players / n : 0,
@@ -111,9 +108,11 @@
       volPlayer: players ? vol / players : 0,
       costPlayer: players ? tubes * price / players : 0,
       spent: tubes * price,
-      tubesWeek: tubesWeek, tubesYear: tubesWeek * WEEKS, budgetYear: tubesWeek * WEEKS * price,
-      price: price, stock: stock,
-      weeksLeft: (stock != null && tubesWeek > 0) ? Math.max(stock, 0) / tubesWeek : null
+      tubesSession: tubesSession,
+      sessionsYear: SESSIONS_YEAR,
+      tubesYear: tubesSession * SESSIONS_YEAR,
+      budgetYear: tubesSession * SESSIONS_YEAR * price,
+      price: price
     };
   }
 
@@ -173,7 +172,7 @@
   }
 
   root.Core = {
-    PER_TUBE: PER_TUBE, WEEKS: WEEKS, DEFAULT_SETTINGS: DEFAULT_SETTINGS,
+    PER_TUBE: PER_TUBE, WEEKS: WEEKS, SESSIONS_YEAR: SESSIONS_YEAR, CLOSED_PER_YEAR: CLOSED_PER_YEAR, DEFAULT_SETTINGS: DEFAULT_SETTINGS,
     cmpEvents: cmpEvents, computeState: computeState, previousVersion: previousVersion,
     stats: stats, validateSession: validateSession, validateRestock: validateRestock, mergeEvents: mergeEvents, csv: csv,
     daysBetween: daysBetween, addDays: addDays, weekday: weekday, longDate: longDate,

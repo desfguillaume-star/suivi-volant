@@ -66,12 +66,12 @@ input.huge{-moz-appearance:textfield;appearance:textfield;font-size:28px;text-al
 .acts{display:flex;gap:6px}
 .proj{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 @media(min-width:560px){.proj{grid-template-columns:repeat(3,1fr)}}
-.settings{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
-@media(max-width:480px){.settings{grid-template-columns:1fr 1fr}}
+.settings{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
 .note{font-size:13px;color:var(--mute);margin-top:10px}
 .empty{color:var(--mute);padding:8px 0}
 details.card summary{cursor:pointer;font-weight:600;list-style:none;min-height:30px;display:flex;align-items:center;justify-content:space-between}
 details.card summary::-webkit-details-summary{display:none}
+.count{font-weight:400;color:var(--mute);font-size:13px;margin-left:4px}
 details.card summary::after{content:"▾";color:var(--mute)}
 details[open].card summary::after{content:"▴"}
 .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
@@ -153,25 +153,23 @@ details[open].card summary::after{content:"▴"}
   </section>
 
   <section class="card">
-    <h2>Projection et stock</h2>
+    <h2>Projection sur l'année</h2>
     <div class="proj" id="proj"></div>
     <div class="settings">
       <div><label for="sPrice">Prix du tube (€)</label><input id="sPrice" type="number" inputmode="decimal" step="0.01" min="0"></div>
-      <div><label for="sStock">Stock avant suivi (tubes)</label><input id="sStock" type="number" inputmode="numeric" min="0" placeholder="à renseigner"></div>
-      <div><label for="sBought">Tubes achetés depuis</label><input id="sBought" type="number" inputmode="numeric" min="0" placeholder="0"></div>
     </div>
-    <div class="note">Stock restant = stock avant suivi + achats − tubes ouverts. 1 tube = 12 volants. Rythme annuel calculé sur 52 semaines.</div>
+    <div class="note" id="projNote"></div>
   </section>
 
-  <section class="card">
-    <h2>Séances</h2>
-    <div id="list"><div class="empty">Chargement…</div></div>
-  </section>
+  <details class="card" id="sessCard">
+    <summary><span>Séances <span class="count" id="sessCount"></span></span></summary>
+    <div id="list" style="margin-top:8px"><div class="empty">Chargement…</div></div>
+  </details>
 
-  <section class="card">
-    <h2>Tubes mis à disposition</h2>
-    <div id="restockList"><div class="empty">Chargement…</div></div>
-  </section>
+  <details class="card" id="restockCard">
+    <summary><span>Tubes mis à disposition <span class="count" id="restockCount"></span></span></summary>
+    <div id="restockList" style="margin-top:8px"><div class="empty">Chargement…</div></div>
+  </details>
 
   <details class="card" id="backupCard">
     <summary>Sauvegarde et sécurité</summary>

@@ -159,9 +159,11 @@
       k(fr(s.volSession, 1), 'volants par séance') + k(fr(s.volPlayer, 2), 'volant / joueur / séance') +
       k(eur2(s.costPlayer), 'coût / joueur / séance') + k(eur2(s.spent), 'dépensé en volants');
     $('proj').innerHTML =
-      k(fr(s.tubesWeek, 2), 'tubes par semaine') + k(fr(s.tubesYear, 0), 'tubes par an (52 sem.)') + k(eur(s.budgetYear), 'budget volants / an') +
-      k(s.stock == null ? 'à renseigner' : fr(s.stock) + ' tubes', 'stock restant') + k(s.weeksLeft == null ? '–' : fr(s.weeksLeft, 0) + ' sem.', 'autonomie estimée');
+      k(fr(s.tubesSession, 2), 'tubes par séance') + k(fr(s.tubesYear, 0), 'tubes par an') + k(eur(s.budgetYear), 'budget volants / an');
+    $('projNote').textContent = 'Projection : ' + s.sessionsYear + ' séances par an (2 par semaine × 52 semaines, moins ' + C.CLOSED_PER_YEAR + ' séances qui n\'ont pas lieu) × ' + fr(s.tubesSession, 2) + ' tube par séance observé.';
 
+    $('sessCount').textContent = '(' + sessions.length + ')';
+    $('restockCount').textContent = '(' + st.restocks.length + ' · ' + st.restocks.reduce(function (t, r) { return t + r.tubes; }, 0) + ' tubes)';
     // Séances
     var list = $('list');
     if (!sessions.length) { list.innerHTML = '<div class="empty">Aucune séance pour le moment.</div>'; }
@@ -209,8 +211,6 @@
     // Réglages (sans écraser un champ en cours de saisie)
     var ae = document.activeElement && document.activeElement.id;
     if (ae !== 'sPrice') $('sPrice').value = st.settings.tubePrice == null ? '' : st.settings.tubePrice;
-    if (ae !== 'sStock') $('sStock').value = st.settings.stockStart == null ? '' : st.settings.stockStart;
-    if (ae !== 'sBought') $('sBought').value = st.settings.bought || '';
 
     renderBadge(); renderBackupInfo(); renderHistory();
   }
@@ -403,15 +403,13 @@
   function onSettingsInput() {
     clearTimeout(settingsTimer);
     settingsTimer = setTimeout(function () {
-      var pr = $('sPrice').value, st = $('sStock').value, bo = $('sBought').value;
-      var next = { tubePrice: pr === '' ? C.DEFAULT_SETTINGS.tubePrice : parseFloat(pr), stockStart: st === '' ? null : parseInt(st, 10), bought: bo === '' ? 0 : parseInt(bo, 10) };
-      if ([next.tubePrice, next.bought].some(isNaN) || (next.stockStart != null && isNaN(next.stockStart)) || next.tubePrice < 0 || next.bought < 0 || (next.stockStart != null && next.stockStart < 0)) return;
-      var cur = currentState().settings;
-      if (cur.tubePrice === next.tubePrice && cur.stockStart === next.stockStart && cur.bought === next.bought) return;
-      addEvents([{ id: newId(), ts: new Date().toISOString(), type: 'settings', tubePrice: next.tubePrice, stockStart: next.stockStart, bought: next.bought }]);
+      var pr = $('sPrice').value, price = pr === '' ? C.DEFAULT_SETTINGS.tubePrice : parseFloat(pr);
+      if (isNaN(price) || price < 0 || price > 200) return;
+      if (currentState().settings.tubePrice === price) return;
+      addEvents([{ id: newId(), ts: new Date().toISOString(), type: 'settings', tubePrice: price }]);
     }, 700);
   }
-  ['sPrice', 'sStock', 'sBought'].forEach(function (id) { $(id).addEventListener('input', onSettingsInput); });
+  $('sPrice').addEventListener('input', onSettingsInput);
 
   /* ---------- Sauvegarde : configuration, export, import ---------- */
   $('syncBadge').addEventListener('click', function () {
