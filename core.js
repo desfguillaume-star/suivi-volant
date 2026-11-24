@@ -51,6 +51,12 @@
     return prev;
   }
 
+  /* Saison d'une date : du 1er septembre au 31 août, ex. « 2026/2027 ». */
+  function saisonOf(iso) {
+    var y = Number(iso.slice(0, 4)), m = Number(iso.slice(5, 7)), start = m >= 9 ? y : y - 1;
+    return start + '/' + (start + 1);
+  }
+
   function daysBetween(a, b) {
     return Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
   }
@@ -73,14 +79,15 @@
     return todayIso;
   }
 
-  /* Lundis et vendredis passés (depuis la première séance, aujourd'hui exclu) sans séance saisie
-     et pas marqués « pas de séance ». */
+  /* Lundis et vendredis des 6 dernières semaines (après la première séance, aujourd'hui exclu) sans séance saisie
+     et pas marqués « pas de séance ». Les trous plus anciens (vacances d'été…) ne sont plus signalés. */
   function missingSessionDates(sessions, noSessions, todayIso) {
     if (!sessions.length) return [];
     var have = {}, first = null;
     sessions.forEach(function (s) { have[s.date] = true; if (!first || s.date < first) first = s.date; });
     (noSessions || []).forEach(function (n) { have[n.date] = true; });
-    var out = [], d = addDays(first, 1), end = addDays(todayIso, -1);
+    var out = [], d = addDays(first, 1), end = addDays(todayIso, -1), debut = addDays(todayIso, -42);
+    if (d < debut) d = debut;
     while (d <= end && out.length < 60) {
       var w = weekday(d);
       if ((w === 1 || w === 5) && !have[d]) out.push(d);
@@ -175,7 +182,7 @@
     PER_TUBE: PER_TUBE, WEEKS: WEEKS, SESSIONS_YEAR: SESSIONS_YEAR, CLOSED_PER_YEAR: CLOSED_PER_YEAR, DEFAULT_SETTINGS: DEFAULT_SETTINGS,
     cmpEvents: cmpEvents, computeState: computeState, previousVersion: previousVersion,
     stats: stats, validateSession: validateSession, validateRestock: validateRestock, mergeEvents: mergeEvents, csv: csv,
-    daysBetween: daysBetween, addDays: addDays, weekday: weekday, longDate: longDate,
+    daysBetween: daysBetween, saisonOf: saisonOf, addDays: addDays, weekday: weekday, longDate: longDate,
     defaultSessionDate: defaultSessionDate, missingSessionDates: missingSessionDates
   };
 })(typeof window !== 'undefined' ? window : module.exports);

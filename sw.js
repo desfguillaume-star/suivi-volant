@@ -1,5 +1,5 @@
 /* Service worker : l'appli s'ouvre même sans réseau (gymnase). Les données, elles, vivent dans IndexedDB, pas ici. */
-var CACHE = 'volants-v6';
+var CACHE = 'volants-v7';
 var FILES = ['./', 'index.html', 'app.js', 'core.js', 'compta.js', 'compta-core.js', 'lock.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', function (e) {

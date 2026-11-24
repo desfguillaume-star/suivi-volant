@@ -90,7 +90,7 @@
   /* ---------- rendu ---------- */
   function render() {
     if (!root) return;
-    var st = state(), s = currentSeason(), t = K.totals(st, s), c = K.caisse(st, K.saisonBounds(s).fin < today() ? K.saisonBounds(s).fin : today());
+    var st = state(), s = currentSeason(), bornes = K.saisonBounds(s), t = K.totals(st, s), c = K.caisse(st, bornes.fin < today() ? bornes.fin : today());
     var mem = K.membresSaison(st, s);
     $('cptSeason').innerHTML = seasonsList().map(function (x) { return '<option value="' + x + '"' + (x === s ? ' selected' : '') + '>' + x + '</option>'; }).join('');
     function k(v, l) { return '<div class="kpi"><b>' + v + '</b><span>' + l + '</span></div>'; }
@@ -99,30 +99,31 @@
       k(eur(c.solde), 'caisse espèces (calculée)') + k(c.comptage ? eur(c.comptage.montant) : '–', 'caisse comptée') +
       k(c.ecart == null ? '–' : eur(c.ecart), 'écart de caisse') + k(mem.payes + ' / ' + mem.total, 'membres à jour');
 
+    function bloc(titre, obj) {
+      var cles = Object.keys(obj).sort();
+      return '<div class="sub" style="margin:8px 0 2px"><b>' + titre + '</b></div>' + (cles.length ? cles.map(function (x) { return '<div class="hist"><span>' + esc(x) + '</span><b>' + eur(obj[x]) + '</b></div>'; }).join('') : '<div class="empty">Rien cette saison.</div>');
+    }
     var cats = K.parCategorie(st, s);
-    $('cptCats').innerHTML = Object.keys(cats).length ? Object.keys(cats).sort().map(function (x) { return '<div class="hist"><span>' + esc(x) + '</span><b>' + eur(cats[x]) + '</b></div>'; }).join('') : '<div class="empty">Aucune dépense cette saison.</div>';
+    $('cptCats').innerHTML = bloc('Recettes', cats.recettes) + bloc('Dépenses', cats.depenses);
 
-    var ops = st.ops.filter(function (o) { return o.date >= K.saisonBounds(s).debut && o.date <= K.saisonBounds(s).fin; }).reverse();
+    var ops = st.ops.filter(function (o) { return K.inSaison(o, s); }).reverse();
+    $('cptOpsN').textContent = '(' + ops.length + ')';
     $('cptOps').innerHTML = ops.length ? ops.map(function (o) {
-      return '<div class="item cpt"><div class="d">' + fmtDate(o.date) + '</div><div><b>' + esc(o.libelle) + '</b><div class="sub">' + esc(o.categorie) + '</div></div>' +
-        '<div class="amt ' + o.sens + '">' + (o.sens === 'recette' ? '+' : '−') + eur(o.montant) + '</div>' +
-        '<div class="acts" style="grid-column:1/-1"><button class="small" data-cact="del-op" data-id="' + esc(o.id) + '">' + (pendingDel === 'op:' + o.id ? 'Confirmer' : 'Supprimer') + '</button></div></div>';
+      var att = K.enAttente(o), plus = o.sens === 'recette';
+      var tags = '<span class="sub">' + esc(o.categorie) + ' · ' + esc(o.mode || '') + '</span>' + (att ? ' <span class="tag warn">chèque en attente</span>' : '');
+      var btns = o.auto ? '<span class="sub">Cotisation : à modifier dans « Membres »</span>' :
+        (att ? '<button class="small primary" data-cact="encaisse" data-id="' + esc(o.id) + '">Encaissé</button>' : '') +
+        '<button class="small" data-cact="edit-op" data-id="' + esc(o.id) + '">Modifier</button>' +
+        '<button class="small" data-cact="del-op" data-id="' + esc(o.id) + '">' + (pendingDel === 'op:' + o.id ? 'Confirmer' : 'Supprimer') + '</button>';
+      return '<div class="item cpt"><div class="d">' + fmtDate(o.date) + '</div><div><b>' + esc(o.libelle) + '</b><div>' + tags + '</div></div>' +
+        '<div class="amt ' + o.sens + '">' + (plus ? '+' : '−') + eur(o.montant) + '</div>' +
+        '<div class="acts" style="grid-column:1/-1">' + btns + '</div></div>';
     }).join('') : '<div class="empty">Aucune opération.</div>';
 
-    var ch = st.cheques.filter(function (c2) { return c2.date >= K.saisonBounds(s).debut && c2.date <= K.saisonBounds(s).fin; }).reverse();
-    $('cptCheques').innerHTML = ch.length ? ch.map(function (c2) {
-      var sel = K.STATUTS_CHEQUE.map(function (x) { return '<option value="' + x + '"' + (x === c2.statut ? ' selected' : '') + '>' + x + '</option>'; }).join('');
-      return '<div class="item cpt"><div class="d">' + fmtDate(c2.date) + '</div><div><b>' + esc(c2.payeur) + '</b>' + (c2.numero ? ' <span class="sub">n° ' + esc(c2.numero) + '</span>' : '') + '<div class="sub">' + eur(c2.montant) + '</div></div>' +
-        '<div class="acts"><select data-cact="statut" data-id="' + esc(c2.id) + '">' + sel + '</select></div></div>';
-    }).join('') : '<div class="empty">Aucun chèque cette saison.</div>';
-
-    var ex = st.especes.filter(function (x) { return x.date >= K.saisonBounds(s).debut && x.date <= K.saisonBounds(s).fin; }).reverse();
-    $('cptEspeces').innerHTML = ex.length ? ex.map(function (x) {
-      return '<div class="item cpt"><div class="d">' + fmtDate(x.date) + '</div><div><b>' + esc(x.libelle) + '</b><div class="sub">' + (x.sens === 'entree' ? 'entrée' : 'sortie') + '</div></div>' +
-        '<div class="amt ' + (x.sens === 'entree' ? 'recette' : 'depense') + '">' + (x.sens === 'entree' ? '+' : '−') + eur(x.montant) + '</div></div>';
-    }).join('') : '<div class="empty">Aucun mouvement d\'espèces.</div>';
-
     var mm = st.membres.filter(function (m) { return m.saison === s; });
+    var rec = K.aReconduire(st, s);
+    $('cptReconduire').hidden = !rec.length;
+    $('cptReconduire').textContent = 'Reconduire ' + rec.length + ' membre' + (rec.length > 1 ? 's' : '') + ' de la saison précédente';
     $('cptMembres').innerHTML = mm.length ? mm.map(function (m) {
       return '<div class="item cpt"><div class="d" style="font-size:15px">' + esc(m.prenom) + '</div><div><span class="tag' + (m.paye ? '' : ' warn') + '">' + (m.paye ? 'à jour' : 'non payé') + '</span>' +
         (m.paye ? ' <span class="sub">' + eur(m.montant) + ' · ' + esc(m.mode || '') + '</span>' : '') + '</div>' +
@@ -133,17 +134,47 @@
   }
 
   /* ---------- formulaires ---------- */
+  var sensOp = 'depense', editingOp = null;
+
   function fillForms() {
-    $('cOpDate').value = today(); $('cChDate').value = today(); $('cEsDate').value = today(); $('cCmDate').value = today();
-    $('cOpCat').innerHTML = K.CATEGORIES.map(function (c) { return '<option>' + c + '</option>'; }).join('');
-    $('cChStatut').innerHTML = K.STATUTS_CHEQUE.map(function (c) { return '<option>' + c + '</option>'; }).join('');
+    $('cOpDate').value = today(); $('cCmDate').value = today();
+    $('cOpMode').innerHTML = K.MODES.map(function (c) { return '<option>' + c + '</option>'; }).join('');
     $('cMbMode').innerHTML = K.MODES.map(function (c) { return '<option>' + c + '</option>'; }).join('');
+    $('cMbMontant').value = K.COTISATION_DEFAUT;
+    fillCats(sensOp);
+  }
+  function fillCats(sens, choisie) {
+    var list = (sens === 'recette' ? K.CATEGORIES_RECETTES : K.CATEGORIES_DEPENSES).slice();
+    if (choisie && list.indexOf(choisie) < 0) list.push(choisie);   // ancienne catégorie conservée à la modification
+    $('cOpCat').innerHTML = list.map(function (c) { return '<option' + (c === choisie ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('');
   }
   function showErr(id, list) { var m = $(id); m.innerHTML = list.map(esc).join('<br>'); m.hidden = !list.length; }
   function num(id) { var v = String($(id).value).replace(',', '.'); return v === '' ? NaN : Number(v); }
+  function handleSubmit(form, fn) { form.addEventListener('submit', function (e) { e.preventDefault(); fn(); }); }
 
-  function handleSubmit(form, fn) {
-    form.addEventListener('submit', function (e) { e.preventDefault(); fn(); });
+  /* Données enregistrées d'une opération (sans les champs calculés). */
+  function dataOp(o) {
+    return { date: o.date, sens: o.sens, libelle: o.libelle, montant: o.montant, categorie: o.categorie, mode: o.mode, pointe: !!o.pointe };
+  }
+  /* Écrit une opération modifiée. Une ancienne fiche « chèque » ou « espèces » est remplacée par une opération. */
+  function ecrireOp(o, data) {
+    var key = o.id;
+    if (o.legacy) { record(o.legacy, o.id, { date: o.date }, true); key = newId(); }
+    record('op', key, data);
+  }
+  function resetOpForm() {
+    editingOp = null;
+    $('cOpLib').value = ''; $('cOpMontant').value = ''; $('cOpDate').value = today();
+    $('cOpSave').textContent = 'Enregistrer'; $('cOpCancel').hidden = true;
+    fillCats(sensOp);
+  }
+  function startEditOp(o) {
+    editingOp = o.id;
+    switchTab('op'); setSens(o.sens, o.categorie);
+    $('cOpDate').value = o.date; $('cOpLib').value = o.libelle; $('cOpMontant').value = o.montant; $('cOpMode').value = o.mode || 'virement';
+    $('cOpSave').textContent = 'Enregistrer la modification'; $('cOpCancel').hidden = false;
+    showErr('cOpErr', []);
+    $('fOp').scrollIntoView({ block: 'center' });
   }
 
   /* ---------- montage ---------- */
@@ -152,24 +183,17 @@
       '<div class="cpt-head"><div><h1 style="font-size:20px;margin:0">💶 Compta</h1><div class="sub">Accès réservé à la trésorerie</div></div>' +
       '<div style="display:flex;gap:8px;align-items:center"><select id="cptSeason" class="sel" aria-label="Saison"></select><button id="cptSync" class="badge" type="button">…</button></div></div>' +
       '<div class="card"><h2>Bilan de la saison</h2><div class="kpis" id="cptKpis"></div>' +
-      '<div class="btns"><button class="small" id="cptCsv" type="button">Exporter le récap (CSV, pour l\'AG)</button></div></div>' +
+      '<div class="btns"><button class="small" id="cptCount" type="button">Compter la caisse</button><button class="small" id="cptCsv" type="button">Exporter le récap (CSV, pour l\'AG)</button></div></div>' +
       '<div class="card"><h2>Ajouter</h2>' +
       '<div class="tabbar2" role="tablist">' +
       '<button class="seg on" data-ctab="op" type="button">Recette / dépense</button>' +
-      '<button class="seg" data-ctab="ch" type="button">Chèque reçu</button>' +
-      '<button class="seg" data-ctab="es" type="button">Espèces</button>' +
-      '<button class="seg" data-ctab="cm" type="button">Comptage caisse</button>' +
       '<button class="seg" data-ctab="mb" type="button">Membre</button></div>' +
       '<form id="fOp" data-cform="op"><div class="seg2"><button type="button" class="seg2b on" data-sens="depense">Dépense</button><button type="button" class="seg2b" data-sens="recette">Recette</button></div>' +
-      '<label>Date</label><input id="cOpDate" type="date"><label>Libellé</label><input id="cOpLib" maxlength="80" placeholder="ex. Badmania, subvention mairie">' +
+      '<label>Date</label><input id="cOpDate" type="date"><label>Description</label><input id="cOpLib" maxlength="80" placeholder="ex. 4 tubes Badmania, subvention mairie">' +
       '<label>Montant (€)</label><input id="cOpMontant" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0,00">' +
-      '<label>Catégorie</label><select id="cOpCat"></select><button class="primary" type="submit">Enregistrer</button><div id="cOpErr" class="msg" hidden></div></form>' +
-      '<form id="fCh" data-cform="ch" hidden><label>Date de remise</label><input id="cChDate" type="date"><label>Payeur (prénom)</label><input id="cChPayeur" maxlength="20" placeholder="ex. Marie">' +
-      '<label>Montant (€)</label><input id="cChMontant" type="number" inputmode="decimal" step="0.01" min="0"><label>Statut</label><select id="cChStatut"></select>' +
-      '<label>N° du chèque (facultatif)</label><input id="cChNum" inputmode="numeric" maxlength="12"><button class="primary" type="submit">Enregistrer le chèque</button><div id="cChErr" class="msg" hidden></div></form>' +
-      '<form id="fEs" data-cform="es" hidden><div class="seg2"><button type="button" class="seg2b on" data-esens="sortie">Sortie</button><button type="button" class="seg2b" data-esens="entree">Entrée</button></div>' +
-      '<label>Date</label><input id="cEsDate" type="date"><label>Libellé</label><input id="cEsLib" maxlength="80" placeholder="ex. cotisation en liquide, café">' +
-      '<label>Montant (€)</label><input id="cEsMontant" type="number" inputmode="decimal" step="0.01" min="0"><button class="primary" type="submit">Enregistrer</button><div id="cEsErr" class="msg" hidden></div></form>' +
+      '<label>Catégorie</label><select id="cOpCat"></select><label>Mode de paiement</label><select id="cOpMode"></select>' +
+      '<div class="hint">Un chèque reçu reste « en attente » (hors recettes) jusqu\'au bouton « Encaissé ».</div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px"><button class="primary" id="cOpSave" type="submit" style="flex:1">Enregistrer</button><button type="button" id="cOpCancel" hidden>Annuler</button></div><div id="cOpErr" class="msg" hidden></div></form>' +
       '<form id="fCm" data-cform="cm" hidden><label>Date du comptage</label><input id="cCmDate" type="date"><label>Montant compté dans la caisse (€)</label><input id="cCmMontant" type="number" inputmode="decimal" step="0.01" min="0">' +
       '<button class="primary" type="submit">Enregistrer le comptage</button><div id="cCmErr" class="msg" hidden></div></form>' +
       '<form id="fMb" data-cform="mb" hidden><label>Prénom (un seul, sans nom de famille)</label><input id="cMbPrenom" maxlength="20" placeholder="ex. Marie">' +
@@ -177,11 +201,10 @@
       '<label>Montant payé (€)</label><input id="cMbMontant" type="number" inputmode="decimal" step="0.01" min="0"><label><input id="cMbPaye" type="checkbox" checked style="width:auto;min-height:0"> Cotisation payée</label>' +
       '<button class="primary" type="submit">Ajouter le membre</button><div id="cMbErr" class="msg" hidden></div></form></div>' +
       '<details class="card"><summary>Opérations de la saison <span class="count" id="cptOpsN"></span></summary><div id="cptOps" style="margin-top:8px"></div></details>' +
-      '<details class="card"><summary>Chèques reçus</summary><div id="cptCheques" style="margin-top:8px"></div></details>' +
-      '<details class="card"><summary>Espèces</summary><div id="cptEspeces" style="margin-top:8px"></div></details>' +
-      '<details class="card" open><summary>Membres</summary><div class="note">Prénoms uniquement. Le suivi ne compte pas dans les recettes : la cotisation est déjà comptée à sa rentrée (chèque, virement ou espèces).</div><div id="cptMembres" style="margin-top:8px"></div></details>' +
-      '<details class="card"><summary>Catégories de dépenses</summary><div id="cptCats" style="margin-top:8px"></div></details>' +
-      '<div class="card"><h2>Sauvegarde</h2><div class="note">La compta utilise la même adresse et le même code secret que les volants (menu « Sauvegarde et sécurité »). <span id="cptNote"></span></div>' +
+      '<details class="card" open><summary>Membres</summary><div class="note">Prénoms uniquement. Une cotisation payée est comptée automatiquement en recette « Adhésions » : ne la saisissez pas une seconde fois.</div>' +
+      '<div class="btns"><button class="small" id="cptReconduire" type="button" hidden></button></div><div id="cptMembres" style="margin-top:8px"></div></details>' +
+      '<details class="card"><summary>Totaux par catégorie</summary><div id="cptCats" style="margin-top:8px"></div></details>' +
+      '<div class="card"><h2>Sauvegarde</h2><div class="note">La compta utilise la même connexion que les volants (menu « Sauvegarde et sécurité »). <span id="cptNote"></span></div>' +
       '<div class="btns"><button class="small" id="cptExport" type="button">Exporter (JSON)</button></div></div>' +
       '<div id="cptToast" class="toast"></div>';
   }
@@ -191,55 +214,54 @@
       var b = e.target.closest('button,[data-ctab]'); if (!b) return;
       if (b.hasAttribute('data-ctab')) { switchTab(b.getAttribute('data-ctab')); return; }
       if (b.hasAttribute('data-sens')) { setSens(b.getAttribute('data-sens')); return; }
-      if (b.hasAttribute('data-esens')) { setEsSens(b.getAttribute('data-esens')); return; }
       var act = b.getAttribute('data-cact'), id = b.getAttribute('data-id');
-      if (act === 'del-op') {
+      var o = (act === 'del-op' || act === 'edit-op' || act === 'encaisse') ? state().ops.filter(function (x) { return x.id === id; })[0] : null;
+      if (act === 'del-op' && o) {
         if (pendingDel !== 'op:' + id) { pendingDel = 'op:' + id; render(); setTimeout(function () { if (pendingDel === 'op:' + id) { pendingDel = null; render(); } }, 4000); return; }
-        pendingDel = null; var o = state().ops.filter(function (x) { return x.id === id; })[0];
-        if (o) { record('op', id, o, true); toast('Opération supprimée'); }
+        pendingDel = null; record(o.legacy || 'op', id, o.legacy ? { date: o.date } : dataOp(o), true); toast('Opération supprimée');
+      } else if (act === 'edit-op' && o) {
+        startEditOp(o);
+      } else if (act === 'encaisse' && o) {
+        var d = dataOp(o); d.pointe = true; ecrireOp(o, d); toast('Chèque encaissé');
       } else if (act === 'toggle-membre') {
         var m = state().membres.filter(function (x) { return x.id === id; })[0];
-        if (m) { var n = Object.assign({}, m, { paye: !m.paye }); record('membre', id, n); toast(n.paye ? 'Marqué payé' : 'Marqué non payé'); }
+        if (m) {
+          var n = { prenom: m.prenom, saison: m.saison, paye: !m.paye, mode: m.mode || 'virement', montant: m.montant, date: m.date };
+          if (n.paye) { n.montant = Number(m.montant) > 0 ? m.montant : K.COTISATION_DEFAUT; n.date = today(); }
+          record('membre', id, n); toast(n.paye ? 'Marqué payé' : 'Marqué non payé');
+        }
       }
     });
-    root.addEventListener('change', function (e) {
-      var t = e.target;
-      if (t.getAttribute && t.getAttribute('data-cact') === 'statut') {
-        var id = t.getAttribute('data-id'), c = state().cheques.filter(function (x) { return x.id === id; })[0];
-        if (c) { record('cheque', id, Object.assign({}, c, { statut: t.value })); toast('Chèque : ' + t.value); }
-      }
-      if (t.id === 'cptSeason') { season = t.value; render(); }
-    });
+    root.addEventListener('change', function (e) { if (e.target.id === 'cptSeason') { season = e.target.value; render(); } });
 
-    var fOp = $('fOp'), sensOp = 'depense';
-    window.__cptSens = function (s) { sensOp = s; };
-    handleSubmit(fOp, function () {
-      var d = { date: $('cOpDate').value, libelle: $('cOpLib').value.trim(), montant: Math.round(num('cOpMontant') * 100) / 100, sens: sensOp, categorie: $('cOpCat').value };
+    handleSubmit($('fOp'), function () {
+      var existant = editingOp ? state().ops.filter(function (x) { return x.id === editingOp; })[0] : null;
+      var d = { date: $('cOpDate').value, libelle: $('cOpLib').value.trim(), montant: Math.round(num('cOpMontant') * 100) / 100, sens: sensOp, categorie: $('cOpCat').value, mode: $('cOpMode').value };
+      d.pointe = (d.sens === 'recette' && d.mode === 'chèque') ? !!(existant && existant.pointe && existant.mode === 'chèque') : true;
       var v = K.validateOp(d, today()); if (v.errors.length) return showErr('cOpErr', v.errors);
-      showErr('cOpErr', []); record('op', newId(), d); $('cOpLib').value = ''; $('cOpMontant').value = ''; toast('Opération enregistrée');
+      showErr('cOpErr', []);
+      if (existant) ecrireOp(existant, d); else record('op', newId(), d);
+      toast(existant ? 'Opération modifiée' : (d.pointe ? 'Opération enregistrée' : 'Chèque enregistré (en attente)'));
+      resetOpForm();
     });
-    handleSubmit($('fCh'), function () {
-      var d = { date: $('cChDate').value, payeur: $('cChPayeur').value.trim(), montant: Math.round(num('cChMontant') * 100) / 100, statut: $('cChStatut').value, numero: $('cChNum').value.trim() };
-      var v = K.validateCheque(d, today()); if (v.errors.length) return showErr('cChErr', v.errors);
-      showErr('cChErr', []); record('cheque', newId(), d); $('cChPayeur').value = ''; $('cChMontant').value = ''; $('cChNum').value = ''; toast('Chèque enregistré');
-    });
-    var esSens = 'sortie';
-    window.__cptEsSens = function (s) { esSens = s; };
-    handleSubmit($('fEs'), function () {
-      var d = { date: $('cEsDate').value, sens: esSens, montant: Math.round(num('cEsMontant') * 100) / 100, libelle: $('cEsLib').value.trim() };
-      var v = K.validateEspece(d, today()); if (v.errors.length) return showErr('cEsErr', v.errors);
-      showErr('cEsErr', []); record('espece', newId(), d); $('cEsLib').value = ''; $('cEsMontant').value = ''; toast('Mouvement enregistré');
-    });
+    $('cOpCancel').addEventListener('click', resetOpForm);
     handleSubmit($('fCm'), function () {
       var d = { date: $('cCmDate').value, montant: Math.round(num('cCmMontant') * 100) / 100 };
       var v = K.validateComptage(d, today()); if (v.errors.length) return showErr('cCmErr', v.errors);
-      showErr('cCmErr', []); record('comptage', newId(), d); $('cCmMontant').value = ''; toast('Comptage enregistré');
+      showErr('cCmErr', []); record('comptage', newId(), d); $('cCmMontant').value = ''; switchTab('op'); toast('Comptage enregistré');
     });
     handleSubmit($('fMb'), function () {
-      var paye = $('cMbPaye').checked, d = { prenom: $('cMbPrenom').value.trim(), saison: $('cMbSaison').value, paye: paye, mode: $('cMbMode').value, montant: paye ? Math.round(num('cMbMontant') * 100) / 100 : 0, date: today() };
+      var paye = $('cMbPaye').checked, d = { prenom: $('cMbPrenom').value.trim(), saison: $('cMbSaison').value, paye: paye, mode: $('cMbMode').value, montant: Math.round(num('cMbMontant') * 100) / 100, date: today() };
+      if (!paye) d.montant = Number(d.montant) > 0 ? d.montant : K.COTISATION_DEFAUT;
       var v = K.validateMembre(d); if (v.errors.length) return showErr('cMbErr', v.errors);
-      showErr('cMbErr', []); record('membre', newId(), d); $('cMbPrenom').value = ''; $('cMbMontant').value = ''; toast('Membre ajouté');
+      showErr('cMbErr', []); record('membre', newId(), d); $('cMbPrenom').value = ''; $('cMbMontant').value = K.COTISATION_DEFAUT; toast('Membre ajouté');
     });
+    $('cptReconduire').addEventListener('click', function () {
+      var list = K.aReconduire(state(), currentSeason());
+      list.forEach(function (d) { record('membre', newId(), d); });
+      toast(list.length + ' membre(s) reconduit(s), à marquer payés au fil de l\'eau');
+    });
+    $('cptCount').addEventListener('click', function () { switchTab('cm'); $('fCm').scrollIntoView({ block: 'center' }); });
 
     $('cptSync').addEventListener('click', function () { sync().then(function (r) { toast(r.ok ? 'Sauvegarde à jour' : 'Échec : ' + r.reason); }); });
     $('cptExport').addEventListener('click', function () {
@@ -263,15 +285,12 @@
     tab = t;
     if (t === 'mb') fillSaisons();
     document.querySelectorAll('[data-ctab]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-ctab') === t); });
-    ['op', 'ch', 'es', 'cm', 'mb'].forEach(function (x) { var f = root.querySelector('[data-cform="' + x + '"]'); if (f) f.hidden = x !== t; });
+    ['op', 'cm', 'mb'].forEach(function (x) { var f = root.querySelector('[data-cform="' + x + '"]'); if (f) f.hidden = x !== t; });
   }
-  function setSens(s) {
-    window.__cptSens(s);
+  function setSens(s, categorie) {
+    sensOp = s;
     document.querySelectorAll('[data-sens]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-sens') === s); });
-  }
-  function setEsSens(s) {
-    window.__cptEsSens(s);
-    document.querySelectorAll('[data-esens]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-esens') === s); });
+    fillCats(s, categorie);
   }
 
   /* ---------- démarrage ---------- */
@@ -284,7 +303,7 @@
     root = $('tabCompta'); if (!root) return;
     mountMarkup(); fillForms(); bind();
     cfgLoad();
-    switchTab('op'); setSens('depense'); setEsSens('sortie');
+    switchTab('op'); setSens('depense');
     idbOpen().then(function (d) { db = d; return idbAll(); }).then(function (fromIdb) {
       events = fromIdb.slice();
       K.mergeEvents(events, mirrorLoad()).forEach(function (e) { events.push(e); });
