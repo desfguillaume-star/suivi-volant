@@ -1,26 +1,30 @@
 /**
- * Sauvegarde de l'appli La Plume Beynatoise : volants + compta (version 2)
+ * Sauvegarde de l'appli La Plume Beynatoise : volants + compta (version 3)
+ *
+ * MISE EN SERVICE (une seule fois) :
+ *   1. Déployer > Nouveau déploiement > Application web (exécuter en tant que moi, accès : tout le monde).
+ *   2. Choisir la fonction « installer » dans la liste, cliquer sur Exécuter, accepter les autorisations.
+ *   3. Ouvrir le « Journal d'exécution » : copier le lien de connexion, se l'envoyer par mail, l'ouvrir une fois sur le téléphone.
+ * PASSATION OU LIEN PERDU : exécuter « changerCode » (nouveau lien, l'ancien cesse de fonctionner).
  *
  * - « Journal » et « JournalCompta » : sauvegarde brute, ajout seul, masquée.
- * - Une feuille par saison et par thème : Compta, Chèques, Espèces, Membres, Volants.
+ * - Une feuille par saison : « Compta 2025-2026 » et « Volants 2025-2026 ».
  * - « Bilan » : totaux par saison et par catégorie.
- * - « Réglages » : prix du tube, cotisation par défaut, liste des catégories.
  *
- * Toutes les feuilles sauf les Journaux sont recalculées à chaque synchronisation. Ne pas les modifier à la main.
- *
- * ⚠️ Changez CODE_SECRET ci-dessous, puis saisissez le même code dans l'appli.
+ * Toutes les feuilles sauf les Journaux sont recalculées à la synchronisation. Ne pas les modifier à la main.
+ * Le code secret n'est PAS dans ce fichier (il est dans les propriétés du script), donc rien de secret sur GitHub.
  */
-var CODE_SECRET = 'CHANGEZ-MOI';
+var URL_APPLI = 'https://desfguillaume-star.github.io/suivi-volant/';
 var NOM_DOSSIER_COPIES = 'Sauvegardes volants';
 var NB_COPIES_GARDEES = 30;
 var VOLANTS_PAR_TUBE = 12;
-var SEANCES_PAR_AN = 96; // 2 séances par semaine × 52 semaines, moins 8 séances qui n'ont pas lieu
 var PRIX_TUBE_DEFAUT = 23.95;
-var COTISATION_DEFAUT = 50;
 
 var CATEGORIES_RECETTES = ['Adhésions', 'Subventions', 'Partenariats', 'Animations et tournois', 'Divers recettes'];
 var CATEGORIES_DEPENSES = ['Volants', 'Location de salle', 'Matériel', 'Affiliation et licences', 'Déplacements et tournois', 'Frais bancaires', 'Assurances', 'Divers dépenses'];
-var ANCIENNES_FEUILLES = ['Séances', 'Mises à disposition', 'Pas de séance', 'Opérations', 'Chèques', 'Espèces', 'Membres', 'Tableau de bord'];
+// Feuilles des versions précédentes, supprimées automatiquement (recalculées, aucune donnée propre).
+var ANCIENNES_FEUILLES = ['Séances', 'Mises à disposition', 'Pas de séance', 'Opérations', 'Chèques', 'Espèces', 'Membres', 'Tableau de bord', 'Réglages'];
+var PREFIXES_ANCIENS = ['Chèques ', 'Espèces '];
 
 var EUR = '#,##0.00 "€"';
 var DATE_FR = 'dd/mm/yyyy';
@@ -37,13 +41,15 @@ function doPost(e) {
   lock.waitLock(20000);
   try {
     var body = JSON.parse(e.postData.contents);
-    if (body.token !== CODE_SECRET) return json_({ ok: false, error: 'token' });
+    if (!tokenOk_(body.token)) return json_({ ok: false, error: 'token' });
     var events = body.events || [];
     var ids = [];
-    var volantsEv = [], comptaEv = [];
+    var volantsEv = [], comptaEv = [], touchees = {};
     events.forEach(function (ev) {
       if (!ev || typeof ev.id !== 'string') return;
       ids.push(ev.id); // accusé de réception
+      var sa = saisonEvenement_(ev);
+      if (sa) touchees[sa] = true;
       if (KINDS_COMPTA.indexOf(ev.kind) >= 0) comptaEv.push(ev); else volantsEv.push(ev);
     });
     var added = 0;
@@ -52,7 +58,7 @@ function doPost(e) {
     SpreadsheetApp.flush();
     // Les données sont déjà dans le Journal : une erreur de mise en forme ne fait pas échouer la synchro.
     try {
-      if (events.length) reconstruireTout_();
+      if (events.length) reconstruireTout_(Object.keys(touchees));
     } catch (errMise) {
       Logger.log('Mise en forme : ' + errMise);
     }
@@ -64,9 +70,46 @@ function doPost(e) {
   }
 }
 
-/* Fonction publique pour reconstruire les feuilles depuis l'éditeur (liste déroulante, puis Exécuter). */
+/* Fonction publique pour reconstruire toutes les feuilles depuis l'éditeur (liste déroulante, puis Exécuter). */
 function reconstruire() {
-  reconstruireTout_();
+  reconstruireTout_(null);
+}
+
+/* ---------- Mise en service et code secret ---------- */
+function codeSecret_() { return PropertiesService.getScriptProperties().getProperty('CODE') || ''; }
+function tokenOk_(t) { var c = codeSecret_(); return !!c && String(t) === c; }
+function nouveauCode_() { return (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, ''); }
+
+/* À exécuter une fois après le déploiement : crée le code, la copie quotidienne, les feuilles, et affiche le lien de connexion. */
+function installer() {
+  var props = PropertiesService.getScriptProperties();
+  if (!props.getProperty('CODE')) props.setProperty('CODE', nouveauCode_());
+  poserCopieQuotidienne_();
+  reconstruireTout_(null);
+  afficherLien_();
+}
+
+/* Passation ou lien perdu : nouveau code, nouveau lien. L'ancien lien ne fonctionne plus. */
+function changerCode() {
+  PropertiesService.getScriptProperties().setProperty('CODE', nouveauCode_());
+  afficherLien_();
+}
+
+function afficherLien_() {
+  var url = '';
+  try { url = ScriptApp.getService().getUrl() || ''; } catch (err) {}
+  url = url.replace(/\/dev$/, '/exec');
+  if (!/\/exec$/.test(url)) {
+    Logger.log('⚠ Déployez d\'abord le script (Déployer > Nouveau déploiement > Application web), puis relancez cette fonction.');
+    return;
+  }
+  Logger.log('Lien de connexion (à ouvrir UNE fois sur le téléphone, ne le partagez pas) :\n' +
+    URL_APPLI + '#connexion=' + encodeURIComponent(url + '|' + codeSecret_()));
+}
+
+function poserCopieQuotidienne_() {
+  var deja = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'copieDeSecurite'; });
+  if (!deja) ScriptApp.newTrigger('copieDeSecurite').timeBased().everyDays(1).atHour(3).create();
 }
 
 function appendVolants_(events) {
@@ -101,7 +144,7 @@ function appendCompta_(events) {
 }
 
 function doGet(e) {
-  if (!e || !e.parameter || e.parameter.token !== CODE_SECRET) return json_({ ok: false, error: 'token' });
+  if (!e || !e.parameter || !tokenOk_(e.parameter.token)) return json_({ ok: false, error: 'token' });
   return json_({ ok: true, events: readJournal_(), compta: readComptaJournal_() });
 }
 
@@ -199,27 +242,50 @@ function triParDate_(list) {
 }
 
 /* ---------- Données compta (dernière version de chaque fiche) ---------- */
-function donneesCompta_() {
-  var events = readComptaJournal_().sort(function (a, b) { return a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : (a.id < b.id ? -1 : 1); });
+/* Même règles que l'appli (compta-core.js) : le test test-compta.js vérifie que les deux donnent les mêmes totaux.
+ * - Un chèque reçu (recette en mode « chèque ») n'est compté qu'une fois encaissé (« pointe »).
+ * - Une cotisation payée devient automatiquement une recette « Adhésions ».
+ * - Les anciennes fiches « cheque » et « espece » sont relues comme des opérations. */
+function donneesCompta_() { return donneesDepuis_(readComptaJournal_()); }
+
+function donneesDepuis_(events) {
+  var tries = events.slice().sort(function (a, b) { return a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : (a.id < b.id ? -1 : 1); });
   var latest = {};
-  events.forEach(function (e) { latest[e.kind + ':' + e.key] = e; });
-  var by = { op: [], cheque: [], espece: [], membre: [] };
+  tries.forEach(function (e) { latest[e.kind + ':' + e.key] = e; });
+  var by = { op: [], membre: [] };
   Object.keys(latest).forEach(function (k) {
     var e = latest[k];
-    if (e.deleted || !by[e.kind]) return;
-    by[e.kind].push(e.data);
+    if (e.deleted) return;
+    var d = e.data || {};
+    if (e.kind === 'op') by.op.push(d);
+    else if (e.kind === 'cheque') {
+      if (d.statut === 'rejete') return;
+      by.op.push({ date: d.date, sens: 'recette', libelle: 'Chèque ' + (d.payeur || ''), montant: d.montant, categorie: 'Divers recettes', mode: 'chèque', pointe: d.statut === 'encaisse' });
+    } else if (e.kind === 'espece') {
+      var rec = d.sens === 'entree';
+      by.op.push({ date: d.date, sens: rec ? 'recette' : 'depense', libelle: d.libelle, montant: d.montant, categorie: rec ? 'Divers recettes' : 'Divers dépenses', mode: 'espèces', pointe: true });
+    } else if (e.kind === 'membre') by.membre.push(d);
   });
-  // Une cotisation payée devient automatiquement une recette « Adhésions » : rien à saisir deux fois.
   by.membre.forEach(function (m) {
     var montant = Number(m.montant) || 0;
     if (m.paye && montant > 0) {
       by.op.push({
         date: m.date, saison: normaliserSaison_(m.saison || saisonDe_(m.date)), sens: 'recette',
-        categorie: 'Adhésions', libelle: 'Cotisation ' + (m.prenom || ''), montant: montant, mode: m.mode || ''
+        categorie: 'Adhésions', libelle: 'Cotisation ' + (m.prenom || ''), montant: montant, mode: m.mode || 'virement', pointe: true
       });
     }
   });
   return by;
+}
+
+/* Saison concernée par un événement reçu (pour ne reconstruire que les feuilles touchées). */
+function saisonEvenement_(ev) {
+  var d = ev.data || {};
+  if (ev.kind) {
+    if (d.saison) return normaliserSaison_(d.saison);
+    return d.date ? saisonDe_(d.date) : '';
+  }
+  return ev.date ? saisonDe_(ev.date) : '';
 }
 
 /* ---------- Saisons ---------- */
@@ -253,8 +319,6 @@ function saisonsConnues_(etat, by) {
   function ajout(s) { if (s && s !== 'Sans date') set[s] = true; }
   etat.sessions.concat(etat.restocks, etat.nones).forEach(function (x) { ajout(saisonDe_(x.date)); });
   by.op.forEach(function (o) { ajout(saisonOp_(o)); });
-  by.cheque.forEach(function (c) { ajout(saisonDe_(c.date)); });
-  by.espece.forEach(function (x) { ajout(saisonDe_(x.date)); });
   by.membre.forEach(function (m) { ajout(saisonMembre_(m)); });
   return Object.keys(set).sort();
 }
@@ -263,32 +327,40 @@ function estRecette_(sens) {
   return /rec|entr/.test(String(sens || '').toLowerCase());
 }
 
+/* Recette par chèque pas encore encaissée : affichée mais pas comptée. */
+function enAttente_(o) {
+  return estRecette_(o.sens) && o.mode === 'chèque' && !o.pointe;
+}
+
 function bilanParSaison_(by) {
   var saisons = {};
   function ligne(s) {
-    if (!saisons[s]) saisons[s] = { saison: s, recettes: 0, depenses: 0 };
+    if (!saisons[s]) saisons[s] = { saison: s, recettes: 0, depenses: 0, attente: 0 };
     return saisons[s];
   }
   by.op.forEach(function (o) {
     var l = ligne(saisonOp_(o)), m = Number(o.montant) || 0;
-    if (estRecette_(o.sens)) l.recettes += m; else l.depenses += m;
-  });
-  by.cheque.forEach(function (c) {
-    // Un chèque ne compte qu'une fois encaissé.
-    if (String(c.statut || '').toLowerCase().indexOf('encaiss') === 0) ligne(saisonDe_(c.date)).recettes += Number(c.montant) || 0;
-  });
-  by.espece.forEach(function (x) {
-    var l = ligne(saisonDe_(x.date)), m = Number(x.montant) || 0;
-    if (estRecette_(x.sens)) l.recettes += m; else l.depenses += m;
+    if (enAttente_(o)) l.attente += m;
+    else if (estRecette_(o.sens)) l.recettes += m;
+    else l.depenses += m;
   });
   return Object.keys(saisons).sort().map(function (k) { return saisons[k]; });
 }
 
-function sommeCategorie_(by, categorie, saison) {
+function sommeCategorie_(by, categorie, saison, recette) {
   return by.op.reduce(function (total, o) {
-    if (o.categorie === categorie && saisonOp_(o) === saison) return total + (Number(o.montant) || 0);
+    if (o.categorie === categorie && saisonOp_(o) === saison && estRecette_(o.sens) === recette && !enAttente_(o)) return total + (Number(o.montant) || 0);
     return total;
   }, 0);
+}
+
+/* Catégories du bilan : la liste de référence, plus celles trouvées dans les données (anciennes catégories). */
+function categoriesBilan_(by, reference, recette) {
+  var liste = reference.slice();
+  by.op.forEach(function (o) {
+    if (estRecette_(o.sens) === recette && o.categorie && liste.indexOf(o.categorie) < 0) liste.push(o.categorie);
+  });
+  return liste;
 }
 
 function somme_(arr) {
@@ -345,29 +417,13 @@ function rebuildComptaSaison_(ss, saison, by) {
     .sort(byDate_)
     .map(function (o) {
       var m = Number(o.montant) || 0;
-      var rec = estRecette_(o.sens);
-      solde += rec ? m : -m;
-      return [dt_(o.date), o.categorie || '', o.libelle || '', o.mode || '', rec ? m : '', rec ? '' : m, solde];
+      var rec = estRecette_(o.sens), att = enAttente_(o);
+      if (!att) solde += rec ? m : -m;
+      return [dt_(o.date), o.categorie || '', o.libelle || '', o.mode || '', (rec && !att) ? m : '', rec ? '' : m, att ? m : '', solde];
     });
   ecrireVue_(ss, nomOnglet_('Compta', saison),
-    ['Date', 'Catégorie', 'Description', 'Mode de paiement', 'Recette (€)', 'Dépense (€)', 'Solde (€)'],
-    rows, { 1: DATE_FR, 5: EUR, 6: EUR, 7: EUR });
-}
-
-function rebuildChequesSaison_(ss, saison, by) {
-  var rows = by.cheque.filter(function (c) { return saisonDe_(c.date) === saison; })
-    .sort(byDate_)
-    .map(function (c) { return [dt_(c.date), c.payeur || '', Number(c.montant) || 0, c.statut || '', c.numero || '']; });
-  ecrireVue_(ss, nomOnglet_('Chèques', saison),
-    ['Date remise', 'Payeur', 'Montant (€)', 'Statut', 'N°'], rows, { 1: DATE_FR, 3: EUR });
-}
-
-function rebuildEspecesSaison_(ss, saison, by) {
-  var rows = by.espece.filter(function (x) { return saisonDe_(x.date) === saison; })
-    .sort(byDate_)
-    .map(function (x) { return [dt_(x.date), estRecette_(x.sens) ? 'Entrée' : 'Sortie', x.libelle || '', Number(x.montant) || 0]; });
-  ecrireVue_(ss, nomOnglet_('Espèces', saison),
-    ['Date', 'Sens', 'Libellé', 'Montant (€)'], rows, { 1: DATE_FR, 4: EUR });
+    ['Date', 'Catégorie', 'Description', 'Mode de paiement', 'Recette (€)', 'Dépense (€)', 'Chèque en attente (€)', 'Solde (€)'],
+    rows, { 1: DATE_FR, 5: EUR, 6: EUR, 7: EUR, 8: EUR });
 }
 
 function rebuildMembresSaison_(ss, saison, by) {
@@ -404,22 +460,21 @@ function rebuildVolantsSaison_(ss, saison, etat) {
   sh.autoResizeColumns(1, 8);
 }
 
-function reconstruireTout_() {
+/* saisonsCibles : saisons à reconstruire (null = toutes). Le Bilan est toujours recalculé. */
+function reconstruireTout_(saisonsCibles) {
   var ss = SpreadsheetApp.getActive();
   var etat = etatVolants_();
   var by = donneesCompta_();
   var saisons = saisonsConnues_(etat, by);
+  var aFaire = saisons.filter(function (s) { return !saisonsCibles || saisonsCibles.indexOf(s) >= 0 || !ss.getSheetByName(nomOnglet_('Compta', s)); });
 
-  saisons.forEach(function (s) {
+  aFaire.forEach(function (s) {
     rebuildComptaSaison_(ss, s, by);
-    rebuildChequesSaison_(ss, s, by);
-    rebuildEspecesSaison_(ss, s, by);
     rebuildMembresSaison_(ss, s, by);
     rebuildVolantsSaison_(ss, s, etat);
   });
 
   rebuildBilan_(ss, saisons, etat, by);
-  rebuildReglages_(ss, etat);
   nettoyerAnciennesFeuilles_(ss);
 
   var bilan = ss.getSheetByName('Bilan');
@@ -427,11 +482,12 @@ function reconstruireTout_() {
   masquerJournaux_();
 }
 
-/* Supprime les anciennes feuilles génériques, remplacées par les feuilles par saison. Les Journaux ne sont jamais touchés. */
+/* Supprime les anciennes feuilles recalculées des versions précédentes. Les Journaux ne sont jamais touchés. */
 function nettoyerAnciennesFeuilles_(ss) {
-  ANCIENNES_FEUILLES.forEach(function (nom) {
-    var s = ss.getSheetByName(nom);
-    if (s && ss.getSheets().length > 1) ss.deleteSheet(s);
+  ss.getSheets().forEach(function (s) {
+    var nom = s.getName();
+    var ancien = ANCIENNES_FEUILLES.indexOf(nom) >= 0 || PREFIXES_ANCIENS.some(function (p) { return nom.indexOf(p) === 0; });
+    if (ancien && ss.getSheets().length > 1) ss.deleteSheet(s);
   });
 }
 
@@ -469,61 +525,33 @@ function rebuildBilan_(ss, saisons, etat, by) {
 
   var bilanCompta = bilanParSaison_(by);
   var lignesCompta = saisons.map(function (s) {
-    var b = bilanCompta.filter(function (x) { return x.saison === s; })[0] || { recettes: 0, depenses: 0 };
-    return [s, b.recettes, b.depenses, b.recettes - b.depenses];
+    var b = bilanCompta.filter(function (x) { return x.saison === s; })[0] || { recettes: 0, depenses: 0, attente: 0 };
+    return [s, b.recettes, b.depenses, b.recettes - b.depenses, b.attente];
   });
   r = titreBloc_(sh, r, 'Comptabilité par saison');
-  r = ecrireBloc_(sh, r, ['Saison', 'Recettes (€)', 'Dépenses (€)', 'Solde (€)'], lignesCompta, [null, EUR, EUR, EUR]);
+  r = ecrireBloc_(sh, r, ['Saison', 'Recettes (€)', 'Dépenses (€)', 'Solde (€)', 'Chèques en attente (€)'], lignesCompta, [null, EUR, EUR, EUR, EUR]);
 
   var formatsSaisons = [null];
   saisons.forEach(function () { formatsSaisons.push(EUR); });
 
-  r = titreBloc_(sh, r, 'Recettes par catégorie (hors chèques et espèces, qui n’ont pas de catégorie)');
+  r = titreBloc_(sh, r, 'Recettes par catégorie');
   r = ecrireBloc_(sh, r, ['Catégorie'].concat(saisons),
-    CATEGORIES_RECETTES.map(function (cat) {
-      return [cat].concat(saisons.map(function (s) { return sommeCategorie_(by, cat, s); }));
+    categoriesBilan_(by, CATEGORIES_RECETTES, true).map(function (cat) {
+      return [cat].concat(saisons.map(function (s) { return sommeCategorie_(by, cat, s, true); }));
     }), formatsSaisons);
 
-  r = titreBloc_(sh, r, 'Dépenses par catégorie (hors chèques et espèces)');
+  r = titreBloc_(sh, r, 'Dépenses par catégorie');
   r = ecrireBloc_(sh, r, ['Catégorie'].concat(saisons),
-    CATEGORIES_DEPENSES.map(function (cat) {
-      return [cat].concat(saisons.map(function (s) { return sommeCategorie_(by, cat, s); }));
+    categoriesBilan_(by, CATEGORIES_DEPENSES, false).map(function (cat) {
+      return [cat].concat(saisons.map(function (s) { return sommeCategorie_(by, cat, s, false); }));
     }), formatsSaisons);
 
   sh.activate();
 }
 
-/* ---------- Réglages (lecture seule, recalculés) ---------- */
-function rebuildReglages_(ss, etat) {
-  var rg = ss.getSheetByName('Réglages') || ss.insertSheet('Réglages');
-  rg.clear();
-  var lignes = [
-    ['Réglage', 'Valeur'],
-    ['Prix du tube (€)', etat.tubePrice],
-    ['Volants par tube', VOLANTS_PAR_TUBE],
-    ['Séances par an (2 par semaine × 52, moins 8 sans séance)', SEANCES_PAR_AN],
-    ['Cotisation annuelle par défaut (€)', COTISATION_DEFAUT]
-  ];
-  rg.getRange(1, 1, lignes.length, 2).setValues(lignes);
-  rg.getRange(1, 1, 1, 2).setFontWeight('bold').setBackground(COULEUR_ENTETE);
-  rg.getRange(2, 2).setNumberFormat(EUR);
-  rg.getRange(5, 2).setNumberFormat(EUR);
-
-  var r = lignes.length + 2;
-  rg.getRange(r, 1).setValue('Catégories de recettes').setFontWeight('bold');
-  r++;
-  CATEGORIES_RECETTES.forEach(function (c) { rg.getRange(r, 1).setValue(c); r++; });
-  r++;
-  rg.getRange(r, 1).setValue('Catégories de dépenses').setFontWeight('bold');
-  r++;
-  CATEGORIES_DEPENSES.forEach(function (c) { rg.getRange(r, 1).setValue(c); r++; });
-  rg.autoResizeColumns(1, 2);
-}
-
-/* ---------- Copie de sécurité quotidienne (optionnelle) ----------
- * Pour l'activer : dans l'éditeur Apps Script, menu « Déclencheurs » (icône horloge) > Ajouter un déclencheur >
- * fonction « copieDeSecurite », source « Selon le temps », « Minuteur quotidien ».
- * Une copie datée du Sheet est rangée dans le dossier « Sauvegardes volants » (les 30 plus récentes sont gardées).
+/* ---------- Copie de sécurité quotidienne ----------
+ * Activée automatiquement par installer(). Une copie datée du Sheet est rangée chaque nuit dans le dossier
+ * « Sauvegardes volants » (les 30 plus récentes sont gardées).
  */
 function copieDeSecurite() {
   var file = DriveApp.getFileById(SpreadsheetApp.getActive().getId());

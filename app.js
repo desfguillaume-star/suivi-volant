@@ -19,7 +19,7 @@
   var events = [];          // journal complet (ajout seul)
   var db = null;            // IndexedDB (peut rester null : le miroir localStorage prend le relais)
   var cfg = { url: '', token: '', lastSyncOk: null };
-  var editingId = null, pendingDelete = null, warnAcked = false, syncing = false, syncTimer = null, persisted = null;
+  var volSeason = null, editingId = null, pendingDelete = null, warnAcked = false, syncing = false, syncTimer = null, persisted = null;
 
   /* ---------- Utilitaires ---------- */
   function today() { var d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
@@ -151,7 +151,17 @@
   }
 
   function doRender() {
-    var st = currentState(), sessions = st.sessions, s = C.stats(sessions, st.settings, st.restocks);
+    var st = currentState();
+    // Saison affichée (du 1er septembre au 31 août) : la saison en cours par défaut.
+    var cur = C.saisonOf(today()), set = {}; set[cur] = true;
+    st.sessions.concat(st.restocks).forEach(function (x) { set[C.saisonOf(x.date)] = true; });
+    var saisons = Object.keys(set).sort();
+    if (!volSeason || !set[volSeason]) volSeason = cur;
+    $('volSeason').innerHTML = saisons.map(function (x) { return '<option' + (x === volSeason ? ' selected' : '') + '>' + x + '</option>'; }).join('');
+    var sessions = st.sessions.filter(function (x) { return C.saisonOf(x.date) === volSeason; });
+    var restocksSaison = st.restocks.filter(function (x) { return C.saisonOf(x.date) === volSeason; });
+    var s = C.stats(sessions, st.settings, restocksSaison);
+    var sAn = C.stats(st.sessions, st.settings, st.restocks);   // projection : tout l'historique, plus fiable en début de saison
     function k(v, l) { return '<div class="kpi"><b>' + v + '</b><span>' + l + '</span></div>'; }
     $('kpis').innerHTML =
       k(fr(s.n), 'séances') + k(fr(s.players), 'joueurs au total') + k(fr(s.avgPlayers, 1), 'joueurs par séance') +
@@ -159,14 +169,14 @@
       k(fr(s.volSession, 1), 'volants par séance') + k(fr(s.volPlayer, 2), 'volant / joueur / séance') +
       k(eur2(s.costPlayer), 'coût / joueur / séance') + k(eur2(s.spent), 'dépensé en volants');
     $('proj').innerHTML =
-      k(fr(s.tubesSession, 2), 'tubes par séance') + k(fr(s.tubesYear, 0), 'tubes par an') + k(eur(s.budgetYear), 'budget volants / an');
-    $('projNote').textContent = 'Projection : ' + s.sessionsYear + ' séances par an (2 par semaine × 52 semaines, moins ' + C.CLOSED_PER_YEAR + ' séances qui n\'ont pas lieu) × ' + fr(s.tubesSession, 2) + ' tube par séance observé.';
+      k(fr(sAn.tubesSession, 2), 'tubes par séance') + k(fr(sAn.tubesYear, 0), 'tubes par an') + k(eur(sAn.budgetYear), 'budget volants / an');
+    $('projNote').textContent = 'Projection : ' + sAn.sessionsYear + ' séances par an (2 par semaine × 52 semaines, moins ' + C.CLOSED_PER_YEAR + ' séances qui n\'ont pas lieu) × ' + fr(sAn.tubesSession, 2) + ' tube par séance observé (toutes saisons).';
 
     $('sessCount').textContent = '(' + sessions.length + ')';
-    $('restockCount').textContent = '(' + st.restocks.length + ' · ' + st.restocks.reduce(function (t, r) { return t + r.tubes; }, 0) + ' tubes)';
+    $('restockCount').textContent = '(' + restocksSaison.length + ' · ' + restocksSaison.reduce(function (t, r) { return t + r.tubes; }, 0) + ' tubes)';
     // Séances
     var list = $('list');
-    if (!sessions.length) { list.innerHTML = '<div class="empty">Aucune séance pour le moment.</div>'; }
+    if (!sessions.length) { list.innerHTML = '<div class="empty">Aucune séance cette saison.</div>'; }
     else {
       var max = Math.max.apply(null, sessions.map(function (x) { return x.players; }).concat([1]));
       var sorted = sessions.slice().sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (a.id < b.id ? 1 : -1); });
@@ -196,9 +206,9 @@
 
     // Tubes mis à disposition
     var rl = $('restockList');
-    if (!st.restocks.length) { rl.innerHTML = '<div class="empty">Aucun restock enregistré.</div>'; }
+    if (!restocksSaison.length) { rl.innerHTML = '<div class="empty">Aucun restock enregistré cette saison.</div>'; }
     else {
-      rl.innerHTML = st.restocks.slice().sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (a.id < b.id ? 1 : -1); }).map(function (r) {
+      rl.innerHTML = restocksSaison.slice().sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (a.id < b.id ? 1 : -1); }).map(function (r) {
         var del = pendingDelete === r.id
           ? '<button class="small danger" data-ract="del" data-id="' + esc(r.id) + '">Confirmer</button>'
           : '<button class="small" data-ract="del" data-id="' + esc(r.id) + '" aria-label="Supprimer">✕</button>';
@@ -238,6 +248,8 @@
         '<button class="small" data-hid="' + esc(e.id) + '">Rétablir</button></div>';
     }).join('') : '<div class="empty">Aucun historique.</div>';
   }
+
+  $('volSeason').addEventListener('change', function () { volSeason = this.value; render(); });
 
   /* ---------- Actions ---------- */
   function sessionEvent(sid, d, deleted) {
@@ -469,9 +481,25 @@
   window.addEventListener('error', function (e) { showFatal(e.error || e.message); });
   window.addEventListener('unhandledrejection', function (e) { showFatal(e.reason); });
 
+  /* Lien de connexion donné par le script (fonction « installer ») : adresse + code, lus une fois puis effacés de la barre d'adresse. */
+  function applyConnexionLink() {
+    var m = /[#&]connexion=([^&]+)/.exec(location.hash || '');
+    if (!m) return false;
+    var ok = false;
+    try {
+      var v = decodeURIComponent(m[1]).split('|');
+      if (/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(v[0]) && /^[A-Za-z0-9]{20,}$/.test(v[1] || '')) {
+        cfg.url = v[0]; cfg.token = v[1]; cfgSave(); ok = true;
+      }
+    } catch (e) {}
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    return ok;
+  }
+
   /* ---------- Démarrage ---------- */
   function init() {
     cfgLoad();
+    var linked = applyConnexionLink();
     return idbOpen().then(function (d) { db = d; return idbAll(); }).then(function (fromIdb) {
       // Fusion IndexedDB + miroir : si l'un des deux est abîmé ou vidé, l'autre le complète.
       events = fromIdb.slice();
@@ -492,6 +520,7 @@
       return idbPut(toPersist);
     }).then(function () {
       render();
+      if (linked) toast('Connexion au Sheet enregistrée');
       if (navigator.storage && navigator.storage.persist) {
         navigator.storage.persist().then(function (p) { persisted = p; renderBackupInfo(); }).catch(function () {});
       }

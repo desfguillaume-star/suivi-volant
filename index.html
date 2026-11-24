@@ -115,21 +115,14 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
   <div class="lock-box">
     <div id="lockSetup" hidden>
       <h1>🔐 Protection de l'appli</h1>
-      <div class="sub">Choisissez une phrase secrète d'au moins 12 caractères (ex. « pomme cactus volant lune vélo »). Elle protège l'appli sur ce téléphone et sert à la synchro. Notez-la : sans elle, plus d'accès aux données.</div>
-      <label for="lockNew">Phrase secrète</label>
-      <input id="lockNew" type="password" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false">
-      <label for="lockNew2">Confirmez la phrase</label>
-      <input id="lockNew2" type="password" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false">
-      <label style="display:flex;gap:8px;align-items:center"><input id="lockBio" type="checkbox" checked style="width:auto;min-height:0"> Déverrouiller aussi avec l'empreinte</label>
-      <button class="primary" id="lockSetBtn" type="button">Enregistrer</button>
+      <div class="sub">L'appli se verrouille avec votre empreinte ou le code de votre téléphone. Aucun mot de passe à retenir.</div>
+      <button class="primary" id="lockSetBtn" type="button">Activer le verrou</button>
+      <button id="lockSkipBtn" type="button">Continuer sans verrou</button>
       <div id="lockSetMsg" class="msg" hidden></div>
     </div>
     <div id="lockUnlock" hidden>
-      <h1>🔒 Déverrouiller</h1>
-      <button class="primary big" id="lockBioBtn" type="button" hidden>Utiliser l'empreinte</button>
-      <label for="lockPhrase">Phrase secrète</label>
-      <input id="lockPhrase" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false">
-      <button id="lockPhraseBtn" type="button">Déverrouiller</button>
+      <h1>🔒 Verrouillé</h1>
+      <button class="primary big" id="lockBioBtn" type="button">Déverrouiller</button>
       <div id="lockMsg" class="msg" hidden></div>
     </div>
   </div>
@@ -162,7 +155,10 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
   </section>
 
   <section class="card">
-    <h2>Bilan de la saison</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
+      <h2 style="margin:0">Bilan de la saison</h2>
+      <select id="volSeason" aria-label="Saison" style="width:auto;min-height:36px;padding:4px 8px"></select>
+    </div>
     <div class="kpis" id="kpis"></div>
   </section>
 
@@ -228,12 +224,13 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
     <summary>Sauvegarde et sécurité</summary>
     <div class="note" id="backupInfo"></div>
     <div style="margin-top:12px">
+      <div class="hint" style="margin:0 0 8px">Connexion habituelle : ouvrez le lien de connexion donné par le script (fonction « installer »). Ces champs ne servent qu'en secours.</div>
       <label for="cUrl">Adresse du script Google (Apps Script)</label>
       <input id="cUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocapitalize="off" autocorrect="off" spellcheck="false">
     </div>
     <div style="margin-top:10px">
       <label for="cToken">Code secret</label>
-      <input id="cToken" type="text" placeholder="le même que dans le script" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <input id="cToken" type="text" placeholder="rempli par le lien de connexion" autocapitalize="off" autocorrect="off" spellcheck="false">
     </div>
     <div class="btns">
       <button class="primary small" id="btnSync" type="button">Enregistrer et synchroniser</button>
