@@ -2,19 +2,20 @@
  * Sauvegarde de l'appli La Plume Beynatoise : volants + compta (version 3)
  *
  * MISE EN SERVICE (une seule fois) :
- *   1. Déployer > Nouveau déploiement > Application web (exécuter en tant que moi, accès : tout le monde).
- *   2. Choisir la fonction « installer » dans la liste, cliquer sur Exécuter, accepter les autorisations.
- *   3. Ouvrir le « Journal d'exécution » : copier le lien de connexion, se l'envoyer par mail, l'ouvrir une fois sur le téléphone.
- * PASSATION OU LIEN PERDU : exécuter « changerCode » (nouveau lien, l'ancien cesse de fonctionner).
+ *   1. Ci-dessous, remplacez CHANGEZ-MOI par un mot de passe de votre choix (ex. plume-beynat-2026), sans espace.
+ *   2. Déployer > Nouveau déploiement > Application web (exécuter en tant que moi, accès : tout le monde).
+ *   3. Dans l'appli (Volants > Sauvegarde et sécurité) : coller l'adresse en /exec et saisir le même mot de passe.
+ *
+ * Après une modification de ce script : Déployer > Gérer les déploiements > crayon > Nouvelle version > Déployer.
  *
  * - « Journal » et « JournalCompta » : sauvegarde brute, ajout seul, masquée.
  * - Une feuille par saison : « Compta 2025-2026 » et « Volants 2025-2026 ».
  * - « Bilan » : totaux par saison et par catégorie.
  *
  * Toutes les feuilles sauf les Journaux sont recalculées à la synchronisation. Ne pas les modifier à la main.
- * Le code secret n'est PAS dans ce fichier (il est dans les propriétés du script), donc rien de secret sur GitHub.
+ * ⚠️ Ne publiez jamais ce fichier sur GitHub avec votre vrai mot de passe dedans.
  */
-var URL_APPLI = 'https://desfguillaume-star.github.io/suivi-volant/';
+var CODE_SECRET = 'CHANGEZ-MOI';
 var NOM_DOSSIER_COPIES = 'Sauvegardes volants';
 var NB_COPIES_GARDEES = 30;
 var VOLANTS_PAR_TUBE = 12;
@@ -75,42 +76,7 @@ function reconstruire() {
   reconstruireTout_(null);
 }
 
-/* ---------- Mise en service et code secret ---------- */
-function codeSecret_() { return PropertiesService.getScriptProperties().getProperty('CODE') || ''; }
-function tokenOk_(t) { var c = codeSecret_(); return !!c && String(t) === c; }
-function nouveauCode_() { return (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, ''); }
-
-/* À exécuter une fois après le déploiement : crée le code, la copie quotidienne, les feuilles, et affiche le lien de connexion. */
-function installer() {
-  var props = PropertiesService.getScriptProperties();
-  if (!props.getProperty('CODE')) props.setProperty('CODE', nouveauCode_());
-  poserCopieQuotidienne_();
-  reconstruireTout_(null);
-  afficherLien_();
-}
-
-/* Passation ou lien perdu : nouveau code, nouveau lien. L'ancien lien ne fonctionne plus. */
-function changerCode() {
-  PropertiesService.getScriptProperties().setProperty('CODE', nouveauCode_());
-  afficherLien_();
-}
-
-function afficherLien_() {
-  var url = '';
-  try { url = ScriptApp.getService().getUrl() || ''; } catch (err) {}
-  url = url.replace(/\/dev$/, '/exec');
-  if (!/\/exec$/.test(url)) {
-    Logger.log('⚠ Déployez d\'abord le script (Déployer > Nouveau déploiement > Application web), puis relancez cette fonction.');
-    return;
-  }
-  Logger.log('Lien de connexion (à ouvrir UNE fois sur le téléphone, ne le partagez pas) :\n' +
-    URL_APPLI + '#connexion=' + encodeURIComponent(url + '|' + codeSecret_()));
-}
-
-function poserCopieQuotidienne_() {
-  var deja = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'copieDeSecurite'; });
-  if (!deja) ScriptApp.newTrigger('copieDeSecurite').timeBased().everyDays(1).atHour(3).create();
-}
+function tokenOk_(t) { return CODE_SECRET !== 'CHANGEZ-MOI' && String(t) === CODE_SECRET; }
 
 function appendVolants_(events) {
   var sh = journal_();
@@ -550,8 +516,9 @@ function rebuildBilan_(ss, saisons, etat, by) {
 }
 
 /* ---------- Copie de sécurité quotidienne ----------
- * Activée automatiquement par installer(). Une copie datée du Sheet est rangée chaque nuit dans le dossier
- * « Sauvegardes volants » (les 30 plus récentes sont gardées).
+ * Facultatif. Pour l'activer : dans l'éditeur Apps Script, menu « Déclencheurs » (icône horloge) > Ajouter un déclencheur >
+ * fonction « copieDeSecurite », source « Selon le temps », « Minuteur quotidien ».
+ * Une copie datée du Sheet est rangée dans le dossier « Sauvegardes volants » (les 30 plus récentes sont gardées).
  */
 function copieDeSecurite() {
   var file = DriveApp.getFileById(SpreadsheetApp.getActive().getId());

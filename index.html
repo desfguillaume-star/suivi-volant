@@ -224,13 +224,13 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
     <summary>Sauvegarde et sécurité</summary>
     <div class="note" id="backupInfo"></div>
     <div style="margin-top:12px">
-      <div class="hint" style="margin:0 0 8px">Connexion habituelle : ouvrez le lien de connexion donné par le script (fonction « installer »). Ces champs ne servent qu'en secours.</div>
+      <div class="hint" style="margin:0 0 8px">Adresse : celle en « /exec » (Apps Script > Déployer > Gérer les déploiements). Code : le mot de passe choisi dans le script.</div>
       <label for="cUrl">Adresse du script Google (Apps Script)</label>
       <input id="cUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocapitalize="off" autocorrect="off" spellcheck="false">
     </div>
     <div style="margin-top:10px">
       <label for="cToken">Code secret</label>
-      <input id="cToken" type="text" placeholder="rempli par le lien de connexion" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <input id="cToken" type="text" placeholder="le même que dans le script" autocapitalize="off" autocorrect="off" spellcheck="false">
     </div>
     <div class="btns">
       <button class="primary small" id="btnSync" type="button">Enregistrer et synchroniser</button>
