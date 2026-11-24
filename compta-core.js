@@ -24,6 +24,8 @@
   function saisonsFrom(events, todayIso) {
     var set = {}, cur = saisonOf(todayIso);
     set[cur] = true;
+    /* Toutes les saisons depuis le début de la compta, même sans écriture encore. */
+    for (var s = saisonOf(DEBUT_COMPTA); s <= cur; s = saisonOf(addDays(saisonBounds(s).fin, 1))) set[s] = true;
     events.forEach(function (e) { if (e.data && DATE_RE.test(e.data.date || '')) set[saisonOf(e.data.date)] = true; });
     return Object.keys(set).sort();
   }
