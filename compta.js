@@ -196,16 +196,17 @@
       '<div style="display:flex;gap:8px;margin-top:12px"><button class="primary" id="cOpSave" type="submit" style="flex:1">Enregistrer</button><button type="button" id="cOpCancel" hidden>Annuler</button></div><div id="cOpErr" class="msg" hidden></div></form>' +
       '<form id="fCm" data-cform="cm" hidden><label>Date du comptage</label><input id="cCmDate" type="date"><label>Montant compté dans la caisse (€)</label><input id="cCmMontant" type="number" inputmode="decimal" step="0.01" min="0">' +
       '<button class="primary" type="submit">Enregistrer le comptage</button><div id="cCmErr" class="msg" hidden></div></form>' +
-      '<form id="fMb" data-cform="mb" hidden><label>Prénom (un seul, sans nom de famille)</label><input id="cMbPrenom" maxlength="20" placeholder="ex. Marie">' +
+      '<form id="fMb" data-cform="mb" hidden><label>Prénom (un seul) + initiale du nom si besoin</label><input id="cMbPrenom" maxlength="24" placeholder="ex. Marie B.">' +
       '<label>Saison</label><select id="cMbSaison"></select><label>Mode de paiement</label><select id="cMbMode"></select>' +
       '<label>Montant payé (€)</label><input id="cMbMontant" type="number" inputmode="decimal" step="0.01" min="0"><label><input id="cMbPaye" type="checkbox" checked style="width:auto;min-height:0"> Cotisation payée</label>' +
       '<button class="primary" type="submit">Ajouter le membre</button><div id="cMbErr" class="msg" hidden></div></form></div>' +
       '<details class="card"><summary>Opérations de la saison <span class="count" id="cptOpsN"></span></summary><div id="cptOps" style="margin-top:8px"></div></details>' +
-      '<details class="card" open><summary>Membres</summary><div class="note">Prénoms uniquement. Une cotisation payée est comptée automatiquement en recette « Adhésions » : ne la saisissez pas une seconde fois.</div>' +
+      '<details class="card" open><summary>Membres</summary><div class="note">Prénoms (avec l&#39;initiale du nom si besoin). Une cotisation payée est comptée automatiquement en recette « Adhésions » : ne la saisissez pas une seconde fois.</div>' +
       '<div class="btns"><button class="small" id="cptReconduire" type="button" hidden></button></div><div id="cptMembres" style="margin-top:8px"></div></details>' +
       '<details class="card"><summary>Totaux par catégorie</summary><div id="cptCats" style="margin-top:8px"></div></details>' +
       '<div class="card"><h2>Sauvegarde</h2><div class="note">La compta utilise la même connexion que les volants (menu « Sauvegarde et sécurité »). <span id="cptNote"></span></div>' +
-      '<div class="btns"><button class="small" id="cptExport" type="button">Exporter (JSON)</button></div></div>' +
+      '<div class="btns"><button class="small" id="cptExport" type="button">Exporter (JSON)</button><button class="small" id="cptImport" type="button">Importer…</button></div>' +
+      '<input id="cptFile" type="file" accept=".json,application/json" hidden><div id="cptImportMsg" class="note" role="status"></div></div>' +
       '<div id="cptToast" class="toast"></div>';
   }
 
@@ -268,6 +269,23 @@
       var blob = new Blob([JSON.stringify({ app: 'compta', version: 1, exportedAt: new Date().toISOString(), events: events.map(function (e) { return { id: e.id, ts: e.ts, kind: e.kind, key: e.key, data: e.data, deleted: e.deleted }; }) }, null, 1)], { type: 'application/json' });
       var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'compta-' + today() + '.json'; document.body.appendChild(a); a.click();
       setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    });
+    $('cptImport').addEventListener('click', function () { $('cptFile').click(); });
+    $('cptFile').addEventListener('change', function () {
+      var f = this.files && this.files[0]; if (!f) return;
+      var msg = $('cptImportMsg'), rd = new FileReader();
+      rd.onload = function () {
+        try {
+          var j = JSON.parse(rd.result), list = Array.isArray(j) ? j : j.events;
+          if (!Array.isArray(list)) throw new Error('format');
+          var added = K.mergeEvents(events, list);
+          if (!added.length) { msg.textContent = 'Fichier lu : rien de nouveau à importer.'; return; }
+          added.forEach(function (e) { e.synced = false; events.push(e); });
+          mirrorSave(); render();
+          idbPut(added).then(function () { msg.textContent = added.length + ' élément(s) importé(s).'; scheduleSync(500); });
+        } catch (err) { msg.textContent = 'Fichier non reconnu : rien n\'a été modifié.'; }
+      };
+      rd.readAsText(f); this.value = '';
     });
     $('cptCsv').addEventListener('click', function () {
       var blob = new Blob(['﻿' + K.recapCsv(state(), currentSeason())], { type: 'text/csv' });

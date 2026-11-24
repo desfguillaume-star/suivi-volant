@@ -132,7 +132,7 @@
 
   function round2(n) { return Math.round(n * 100) / 100; }
 
-  function validMontant(v) { return typeof v === 'number' && isFinite(v) && v > 0 && v <= 100000 && Math.round(v * 100) === v * 100; }
+  function validMontant(v) { return typeof v === 'number' && isFinite(v) && v > 0 && v <= 100000 && Math.abs(Math.round(v * 100) - v * 100) < 1e-6; }
   function validDate(d, todayIso) {
     return DATE_RE.test(d || '') && !isNaN(Date.parse(d)) && d >= DEBUT_COMPTA && d <= addDays(todayIso, 1);
   }
@@ -156,7 +156,7 @@
   }
   function validateMembre(d) {
     var e = [];
-    if (!d.prenom || !/^[A-Za-zÀ-ÿ'-]{2,20}$/.test(d.prenom.trim())) e.push('Un seul prénom (prénom composé avec tiret accepté), 2 à 20 lettres : pas de nom de famille.');
+    if (!d.prenom || !/^[A-Za-zÀ-ÿ'-]{2,20}( [A-Za-zÀ-ÿ]\.?)?$/.test(d.prenom.trim())) e.push('Un seul prénom (tiret accepté), 2 à 20 lettres, puis au plus l\'initiale du nom (ex. Marie B.) : pas de nom de famille.');
     if (!/^\d{4}\/\d{4}$/.test(d.saison || '')) e.push('Saison invalide.');
     if (d.paye && !validMontant(Number(d.montant))) e.push('Montant payé : nombre positif.');
     if (d.mode && MODES_ACCEPTES.indexOf(d.mode) < 0) e.push('Mode de paiement inconnu.');
