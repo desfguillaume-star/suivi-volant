@@ -481,25 +481,9 @@
   window.addEventListener('error', function (e) { showFatal(e.error || e.message); });
   window.addEventListener('unhandledrejection', function (e) { showFatal(e.reason); });
 
-  /* Lien de connexion donné par le script (fonction « installer ») : adresse + code, lus une fois puis effacés de la barre d'adresse. */
-  function applyConnexionLink() {
-    var m = /[#&]connexion=([^&]+)/.exec(location.hash || '');
-    if (!m) return false;
-    var ok = false;
-    try {
-      var v = decodeURIComponent(m[1]).split('|');
-      if (/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(v[0]) && /^[A-Za-z0-9]{20,}$/.test(v[1] || '')) {
-        cfg.url = v[0]; cfg.token = v[1]; cfgSave(); ok = true;
-      }
-    } catch (e) {}
-    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
-    return ok;
-  }
-
   /* ---------- Démarrage ---------- */
   function init() {
     cfgLoad();
-    var linked = applyConnexionLink();
     return idbOpen().then(function (d) { db = d; return idbAll(); }).then(function (fromIdb) {
       // Fusion IndexedDB + miroir : si l'un des deux est abîmé ou vidé, l'autre le complète.
       events = fromIdb.slice();
@@ -520,7 +504,6 @@
       return idbPut(toPersist);
     }).then(function () {
       render();
-      if (linked) toast('Connexion au Sheet enregistrée');
       if (navigator.storage && navigator.storage.persist) {
         navigator.storage.persist().then(function (p) { persisted = p; renderBackupInfo(); }).catch(function () {});
       }
