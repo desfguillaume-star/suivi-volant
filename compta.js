@@ -125,11 +125,14 @@
     $('cptReconduire').hidden = !rec.length;
     $('cptReconduire').textContent = 'Reconduire ' + rec.length + ' membre' + (rec.length > 1 ? 's' : '') + ' de la saison précédente';
     $('cptMembres').innerHTML = mm.length ? mm.map(function (m) {
-      return '<div class="item cpt"><div class="d" style="font-size:15px">' + esc(m.prenom) + '</div><div><span class="tag' + (m.paye ? '' : ' warn') + '">' + (m.paye ? 'à jour' : 'non payé') + '</span>' +
-        (m.paye ? ' <span class="sub">' + eur(m.montant) + ' · ' + esc(m.mode || '') + '</span>' : '') + '</div>' +
-        '<div class="acts"><button class="small" data-cact="toggle-membre" data-id="' + esc(m.id) + '">' + (m.paye ? 'Marquer non payé' : 'Marquer payé') + '</button>' +
+      var conf = pendingDel === 'mb:' + m.id;
+      return '<div class="mb"><div class="mb-top"><div class="n">' + esc(m.prenom) + '</div>' +
+        '<div class="r"><span class="tag' + (m.paye ? '' : ' warn') + '">' + (m.paye ? 'à jour' : 'non payé') + '</span>' +
+        (m.paye ? '<span class="sub">' + eur(m.montant) + ' · ' + esc(m.mode || '') + '</span>' : '') + '</div></div>' +
+        '<div class="acts">' +
+        '<button class="small" data-cact="toggle-membre" data-id="' + esc(m.id) + '">' + (m.paye ? 'Non payé' : 'Payé') + '</button>' +
         '<button class="small" data-cact="rename-membre" data-id="' + esc(m.id) + '">Renommer</button>' +
-        '<button class="small' + (pendingDel === 'mb:' + m.id ? ' danger' : '') + '" data-cact="del-membre" data-id="' + esc(m.id) + '">' + (pendingDel === 'mb:' + m.id ? 'Confirmer la suppression' : 'Supprimer') + '</button></div></div>';
+        '<button class="small' + (conf ? ' danger' : '') + '" data-cact="del-membre" data-id="' + esc(m.id) + '">' + (conf ? 'Confirmer ?' : 'Supprimer') + '</button></div></div>';
     }).join('') : '<div class="empty">Aucun membre pour cette saison.</div>';
 
     renderSync();
