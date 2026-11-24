@@ -82,10 +82,63 @@ details[open].card summary::after{content:"▴"}
 .toast button{background:transparent;color:var(--bg);border:1px solid var(--bg);min-height:34px;padding:2px 12px;font-weight:600}
 #fatal{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:12px;margin-bottom:12px;font-size:14px}
 #fatal[hidden]{display:none}
+.lock{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.lock[hidden]{display:none}
+.lock-box{width:100%;max-width:380px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+.lock-box h1{margin-bottom:8px}
+.lock-box label{margin-top:10px}
+.lock-box .primary,.lock-box button{width:100%;margin-top:12px}
+body.locked .wrap,body.locked .tabs{visibility:hidden}
+select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;min-height:46px;width:100%}
+.tabs{display:flex;gap:6px;max-width:720px;margin:0 auto;padding:10px 14px 0}
+.tab{flex:1;min-height:44px;background:var(--card)}
+.tab.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.cpt-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.cpt-head select{width:auto;min-height:40px}
+.tabbar2{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.seg{flex:1 1 30%;min-height:40px;font-size:13px;padding:6px 8px;background:var(--bg)}
+.seg.on,.seg2b.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.seg2{display:flex;gap:6px;margin-bottom:10px}
+.seg2b{flex:1;min-height:40px}
+.amt{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.amt.recette{color:var(--ok)}
+.amt.depense{color:var(--warn)}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+.item.cpt .acts select{width:auto;min-height:36px;padding:4px 8px;font-size:13px}
+.item.cpt .acts button{min-height:36px}
+.item.cpt .acts{justify-content:flex-start}
+.cpt-cell{display:flex;flex-direction:column}
 </style>
 </head>
 <body>
-<div class="wrap">
+<div id="lock" class="lock" hidden>
+  <div class="lock-box">
+    <div id="lockSetup" hidden>
+      <h1>🔐 Protection de l'appli</h1>
+      <div class="sub">Choisissez une phrase secrète d'au moins 12 caractères (ex. « pomme cactus volant lune vélo »). Elle protège l'appli sur ce téléphone et sert à la synchro. Notez-la : sans elle, plus d'accès aux données.</div>
+      <label for="lockNew">Phrase secrète</label>
+      <input id="lockNew" type="password" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <label for="lockNew2">Confirmez la phrase</label>
+      <input id="lockNew2" type="password" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <label style="display:flex;gap:8px;align-items:center"><input id="lockBio" type="checkbox" checked style="width:auto;min-height:0"> Déverrouiller aussi avec l'empreinte</label>
+      <button class="primary" id="lockSetBtn" type="button">Enregistrer</button>
+      <div id="lockSetMsg" class="msg" hidden></div>
+    </div>
+    <div id="lockUnlock" hidden>
+      <h1>🔒 Déverrouiller</h1>
+      <button class="primary big" id="lockBioBtn" type="button" hidden>Utiliser l'empreinte</button>
+      <label for="lockPhrase">Phrase secrète</label>
+      <input id="lockPhrase" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <button id="lockPhraseBtn" type="button">Déverrouiller</button>
+      <div id="lockMsg" class="msg" hidden></div>
+    </div>
+  </div>
+</div>
+<nav class="tabs" id="tabs" aria-label="Espaces">
+  <button class="tab on" data-t="volants" type="button">🏸 Volants</button>
+  <button class="tab" data-t="compta" type="button">💶 Compta</button>
+</nav>
+<div class="wrap" id="tabVolants">
   <header>
     <div>
       <h1>🏸 Volants</h1>
@@ -201,9 +254,26 @@ details[open].card summary::after{content:"▴"}
     <div id="hist" style="margin-top:8px"></div>
   </details>
 </div>
+<div class="wrap" id="tabCompta" hidden></div>
 <div class="toast" id="toast"><span id="toastText"></span><button id="toastBtn" type="button" hidden>Annuler</button></div>
 
 <script src="core.js"></script>
+<script src="lock.js"></script>
 <script src="app.js"></script>
+<script src="compta-core.js"></script>
+<script src="compta.js"></script>
+<script>
+(function () {
+  var tabs = document.querySelectorAll('#tabs .tab');
+  function show(t) {
+    document.getElementById('tabVolants').hidden = t !== 'volants';
+    document.getElementById('tabCompta').hidden = t !== 'compta';
+    tabs.forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-t') === t); });
+    if (window.Compta) { if (t === 'compta') window.Compta.open(); else window.Compta.close(); }
+    window.scrollTo(0, 0);
+  }
+  tabs.forEach(function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-t')); }); });
+})();
+</script>
 </body>
 </html>
