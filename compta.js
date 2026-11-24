@@ -127,7 +127,9 @@
     $('cptMembres').innerHTML = mm.length ? mm.map(function (m) {
       return '<div class="item cpt"><div class="d" style="font-size:15px">' + esc(m.prenom) + '</div><div><span class="tag' + (m.paye ? '' : ' warn') + '">' + (m.paye ? 'à jour' : 'non payé') + '</span>' +
         (m.paye ? ' <span class="sub">' + eur(m.montant) + ' · ' + esc(m.mode || '') + '</span>' : '') + '</div>' +
-        '<div class="acts"><button class="small" data-cact="toggle-membre" data-id="' + esc(m.id) + '">' + (m.paye ? 'Marquer non payé' : 'Marquer payé') + '</button></div></div>';
+        '<div class="acts"><button class="small" data-cact="toggle-membre" data-id="' + esc(m.id) + '">' + (m.paye ? 'Marquer non payé' : 'Marquer payé') + '</button>' +
+        '<button class="small" data-cact="rename-membre" data-id="' + esc(m.id) + '">Renommer</button>' +
+        '<button class="small' + (pendingDel === 'mb:' + m.id ? ' danger' : '') + '" data-cact="del-membre" data-id="' + esc(m.id) + '">' + (pendingDel === 'mb:' + m.id ? 'Confirmer la suppression' : 'Supprimer') + '</button></div></div>';
     }).join('') : '<div class="empty">Aucun membre pour cette saison.</div>';
 
     renderSync();
@@ -224,6 +226,20 @@
         startEditOp(o);
       } else if (act === 'encaisse' && o) {
         var d = dataOp(o); d.pointe = true; ecrireOp(o, d); toast('Chèque encaissé');
+      } else if (act === 'rename-membre' || act === 'del-membre') {
+        var mb = state().membres.filter(function (x) { return x.id === id; })[0];
+        if (!mb) return;
+        var base = { prenom: mb.prenom, saison: mb.saison, paye: mb.paye, mode: mb.mode || 'virement', montant: mb.montant, date: mb.date };
+        if (act === 'rename-membre') {
+          var np = window.prompt('Prénom (avec l\'initiale du nom si besoin, ex. Marie B.)', mb.prenom);
+          if (np == null) return;
+          base.prenom = np.trim();
+          var vr = K.validateMembre(base); if (vr.errors.length) { toast(vr.errors[0]); return; }
+          record('membre', id, base); toast('Membre renommé');
+        } else {
+          if (pendingDel !== 'mb:' + id) { pendingDel = 'mb:' + id; render(); setTimeout(function () { if (pendingDel === 'mb:' + id) { pendingDel = null; render(); } }, 4000); return; }
+          pendingDel = null; record('membre', id, base, true); toast('Membre supprimé');
+        }
       } else if (act === 'toggle-membre') {
         var m = state().membres.filter(function (x) { return x.id === id; })[0];
         if (m) {
